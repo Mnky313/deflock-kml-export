@@ -47,8 +47,8 @@ OVERPASS_MIRRORS = [
     "https://overpass.kumi.systems/api/interpreter",
 ]
 REQUEST_TIMEOUT_SECONDS = 180
-RETRIES_PER_MIRROR = 3
-RETRY_BACKOFF_SECONDS = 5
+RETRIES_PER_MIRROR = 65535
+RETRY_BACKOFF_SECONDS = 30
 
 
 REQUEST_HEADERS = {
@@ -384,7 +384,7 @@ def main():
         description="Pull ALPR camera locations from OpenStreetMap (DeFlock's data source) as KML."
     )
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--state", help="US state name or 2-letter code (e.g. 'California' or 'CA')")
+    group.add_argument("--state", help="US state(s) name or 2-letter code(s) (e.g. 'California', 'CA', 'California,Nevada' or 'CA,NV')")
     group.add_argument("--all-us", action="store_true", help="Fetch all 50 states + DC")
     group.add_argument("--list-states", action="store_true", help="List valid --state values and exit")
     parser.add_argument("--output-dir", default=".", help="Directory to write KML file(s) into (default: current directory)")
@@ -417,33 +417,34 @@ def main():
         nodes = fetch_all_us_nodes(progress_callback=progress)
         scope_label = "United States"
     else:
-        state_code = resolve_state_code(args.state)
-        print(f"Fetching {state_code} from OpenStreetMap (as of {fetched_at})...")
-        nodes = fetch_state_nodes(state_code)
-        # Use the originally-typed name/code for a friendlier filename/label.
-        scope_label = args.state
+        for state in args.state.split(','):
+            state_code = resolve_state_code(state)
+            print(f"Fetching {state_code} from OpenStreetMap (as of {fetched_at})...")
+            nodes = fetch_state_nodes(state_code)
+            # Use the originally-typed name/code for a friendlier filename/label.
+            scope_label = state
 
-    print(f"Got {len(nodes)} ALPR camera nodes.")
+            print(f"Got {len(nodes)} ALPR camera nodes.")
 
-    if len(nodes) == 0:
-        print("Nothing to write -- zero nodes found for this scope.")
-        return
+            if len(nodes) == 0:
+                print("Nothing to write -- zero nodes found for this scope.")
+                return
 
-    paths = write_kml_files(nodes, scope_label, args.output_dir, args.max_per_file)
+            paths = write_kml_files(nodes, scope_label, args.output_dir, args.max_per_file)
 
-    print(f"\nWrote {len(paths)} file(s):")
-    for p in paths:
-        print(f"  {p}")
+            print(f"\nWrote {len(paths)} file(s):")
+            for p in paths:
+                print(f"  {p}")
 
-    if len(paths) > 1:
-        print(
-            f"\nNote: split into {len(paths)} files because Google My Maps silently "
-            f"truncates any single layer past {args.max_per_file} features (no error "
-            "shown -- it just drops the rest). Import each file as a separate layer. "
-            "Google My Maps also caps at 10 layers / 10,000 features per MAP total -- "
-            "if you have more than that, you'll need multiple separate My Maps maps, "
-            "or use Google Earth Pro / QGIS instead, which don't have this limit."
-        )
+            if len(paths) > 1:
+                print(
+                    f"\nNote: split into {len(paths)} files because Google My Maps silently "
+                    f"truncates any single layer past {args.max_per_file} features (no error "
+                    "shown -- it just drops the rest). Import each file as a separate layer. "
+                    "Google My Maps also caps at 10 layers / 10,000 features per MAP total -- "
+                    "if you have more than that, you'll need multiple separate My Maps maps, "
+                    "or use Google Earth Pro / QGIS instead, which don't have this limit."
+                )
 
 
 if __name__ == "__main__":
