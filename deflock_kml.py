@@ -23,6 +23,7 @@ import argparse
 import http.client
 import json
 import os
+import math
 import sys
 import time
 import urllib.error
@@ -211,6 +212,54 @@ GOOGLE_MY_MAPS_MAX_PER_LAYER = 2000  # hard limit; exceeding this is SILENTLY
                                       # truncated by Google My Maps with no
                                       # error shown -- see README.
 
+def move_point(lat, lng, distance, bearing):
+    """
+    Returns (lat, lng) a `distance` meters away at `bearing` degrees.
+    0 = north, 90 = east, 270 = west.
+    """
+    R = 6378137  # WGS84 mean radius in meters
+    
+    # Convert inputs to radians
+    lat_rad = math.radians(lat)
+    lng_rad = math.radians(lng)
+    bearing_rad = math.radians(bearing)
+    
+    # Angular distance in radians
+    d = distance / R
+    
+    # Calculate new latitude
+    new_lat_rad = math.asin(
+        math.sin(lat_rad) * math.cos(d) +
+        math.cos(lat_rad) * math.sin(d) * math.cos(bearing_rad)
+    )
+    
+    # Calculate new longitude
+    new_lng_rad = lng_rad + math.atan2(
+        math.sin(bearing_rad) * math.sin(d) * math.cos(lat_rad),
+        math.cos(d) - math.sin(lat_rad) * math.sin(new_lat_rad)
+    )
+    
+    # Convert back to degrees
+    new_lat = math.degrees(new_lat_rad)
+    new_lng = math.degrees(new_lng_rad)
+    
+    return new_lat, new_lng
+
+def circle_points(center_lat, center_lng, radius, num_points):
+    """
+    Returns a list of (lat, lng) points forming a circle around the center.
+    """
+    points = []
+    for i in range(num_points):
+        angle = (360 / num_points) * i  # degrees for each point
+        # Convert angle to bearing (0 = north, clockwise)
+        bearing = angle
+        # Move `radius` meters at this bearing
+        lat, lng = move_point(center_lat, center_lng, radius, bearing)
+        points.append(f"{lng},{lat}")
+    # Close circle
+    points.append(points[0])
+    return points
 
 def node_to_placemark(node: dict) -> str:
     tags = node.get("tags", {})
@@ -240,13 +289,32 @@ def node_to_placemark(node: dict) -> str:
             desc_lines.append(f"{label}: {value}")
     description = xml_escape("\n".join(desc_lines))
 
+    try:
+        direction_int = int(direction)
+        # Draw vision code with 40 degree FOV (should be good enough)
+        left_lat, left_lon = move_point(lat,lon,100,direction_int-20)
+        right_lat, right_lon = move_point(lat,lon,100,direction_int+20)
+        coordsArray = [f"{lon},{lat}",f"{left_lon},{left_lat}",f"{right_lon},{right_lat}",f"{lon},{lat}"]
+    except:
+        # not a number for direction, assume it's 360 degree
+        coordsArray = circle_points(lat,lon,100,32)
+
+    outputCoords=""
+    for p in coordsArray:
+        outputCoords=f"{outputCoords}{p}\n"
     return (
         "    <Placemark>\n"
         f"      <name>{name}</name>\n"
         f"      <description>{description}</description>\n"
-        "      <Point>\n"
-        f"        <coordinates>{lon},{lat},0</coordinates>\n"
-        "      </Point>\n"
+        "       <LineString>\n"
+        "           <extrude>0</extrude>\n"
+        "           <tessellate>1</tessellate>\n"
+        "           <altitudeMode>clampToGround</altitudeMode>\n"
+        "           <coordinates>\n"
+        f"              {outputCoords}"
+        "           </coordinates>\n"
+        "      </LineString>\n"
+        "      <styleUrl>#alprStyle</styleUrl>\n"
         "    </Placemark>\n"
     )
 
@@ -284,6 +352,19 @@ def write_kml_files(nodes: list, scope_label: str, output_dir: str,
             "    <description>Source: OpenStreetMap (surveillance:type=ALPR), "
             "same data DeFlock.me displays. ODbL licensed -- see "
             "https://www.openstreetmap.org/copyright</description>\n"
+            '<Style id="alprStyle">\n'
+            "    <LineStyle>\n"
+            "        <color>ffff00ff</color>\n"
+            "        <colorMode>normal</colorMode>\n"
+            "        <width>8</width>\n"
+            "    </LineStyle>\n"
+            "    <PolyStyle>\n"
+            "        <color>77ff00ff</color>\n"
+            "        <colorMode>normal</colorMode>\n"
+            "        <fill>true</fill>\n"
+            "        <outline>true</outline>\n"
+            "    </PolyStyle>\n"
+            "</Style>\n"
             f"{placemarks}"
             "  </Document>\n"
             "</kml>\n"
