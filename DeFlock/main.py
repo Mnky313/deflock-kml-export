@@ -17,6 +17,7 @@ import urllib.request
 from datetime import date, datetime, timezone
 from xml.sax.saxutils import escape as xml_escape
 
+# Chnage User-Agent when requesting from overpass API
 REQUEST_HEADERS = {
     "User-Agent": "deflock-kml-export/2.0 (contact: run by end user; ALPR-mapping tool using the OpenStreetMap Overpass API)",
 }
@@ -153,15 +154,19 @@ def node_to_placemark(node: dict) -> str:
     description = xml_escape("\n".join(desc_lines))
 
     try:
+        # Convert direction to int
         direction_int = int(direction)
-        # Draw vision code with 40 degree FOV (should be good enough)
+        # Get leftmost (reletive) point of vision cone
         left_lat, left_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction_int-(CAMERA_VISION_FOV/2))
+        # Get rightmost (relative) point of vision cone
         right_lat, right_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction_int+(CAMERA_VISION_FOV/2))
+        # Create triangle of vision cone
         coordsArray = [f"{lon},{lat}",f"{left_lon},{left_lat}",f"{right_lon},{right_lat}",f"{lon},{lat}"]
     except:
-        # not a number for direction, assume it's 360 degree
+        # if something fails default to circle (usually because direction is not a number)
         coordsArray = circle_points(lat,lon,CAMERA_VISION_RANGE,32)
 
+    # Convert coordsArray to plain string for inputting in XML
     outputCoords=""
     for p in coordsArray:
         outputCoords=f"{outputCoords}{p}\n"
@@ -182,15 +187,15 @@ def node_to_placemark(node: dict) -> str:
     )
 
 
-def write_kml_files(nodes: list, state: str, output_dir: str):
+def write_kml_files(nodes: list, state: str):
     """
     Writes nodes to file with todays date/state
     """
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
     today = date.today().isoformat()
 
     filename = f"deflock_{state}_{today}.kml"
-    path = os.path.join(output_dir, filename)
+    path = os.path.join(OUTPUT_PATH, filename)
 
     placemarks = "".join(node_to_placemark(n) for n in nodes)
     doc_name = f"DeFlock ALPR Cameras -- {state} ({today})"
@@ -222,25 +227,15 @@ def write_kml_files(nodes: list, state: str, output_dir: str):
     )
     with open(path, "w", encoding="utf-8") as f:
         f.write(kml)
-    return path
+    return
 
 def main():
     for state in INCLUDED_STATES:
-        fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        print(f"Fetching {state} from OpenStreetMap (as of {fetched_at})...")
         nodes = fetch_state_nodes(state)
+        if len(nodes) > 0:
+            write_kml_files(nodes, state)
 
-        print(f"Got {len(nodes)} ALPR camera nodes.")
-
-        if len(nodes) == 0:
-            print("Nothing to write -- zero nodes found for this scope.")
-            return
-
-        path = write_kml_files(nodes, state, OUTPUT_PATH)
-
-        print(f"\nWrote file: {path}")
-
-schedule.every().day.at("21:09").do(main)
+schedule.every().day.at("3:00").do(main)
 
 while True:
     schedule.run_pending()
