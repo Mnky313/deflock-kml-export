@@ -21,7 +21,7 @@ REQUEST_HEADERS = {
     "User-Agent": "deflock-kml-export/2.0 (contact: run by end user; ALPR-mapping tool using the OpenStreetMap Overpass API)",
 }
 
-OVERPASS_MIRRORS = os.getenv('INCLUDED_STATES').split(',')
+OVERPASS_MIRRORS = os.getenv('OVERPASS_MIRRORS').split(',')
 REQUEST_TIMEOUT_SECONDS = int(os.getenv('REQUEST_TIMEOUT_SECONDS'))
 RETRIES_PER_MIRROR = int(os.getenv('RETRIES_PER_MIRROR'))
 RETRY_BACKOFF_SECONDS = int(os.getenv('RETRY_BACKOFF_SECONDS'))
