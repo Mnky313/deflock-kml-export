@@ -192,7 +192,7 @@ def write_kml_files(nodes: list, state: str, output_dir: str):
     filename = f"deflock_{state}_{today}.kml"
     path = os.path.join(output_dir, filename)
 
-    placemarks = "".join(node_to_placemark(n) for n in chunk)
+    placemarks = "".join(node_to_placemark(n) for n in nodes)
     doc_name = f"DeFlock ALPR Cameras -- {state} ({today})"
 
     kml = (
