@@ -1,5 +1,5 @@
 FROM python
-RUN pip install schedule
+RUN pip install pycron
 
 ADD DeFlock /app
 WORKDIR /app

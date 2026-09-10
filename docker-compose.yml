@@ -24,6 +24,10 @@ services:
       - INCLUDED_STATES=AK,AL,AR,AZ,CA,CO,CT,DE,FL,GA,HI,IA,ID,IL,IN,KS,KY,LA,MA,MD,ME,MI,MN,MO,MS,MT,NC,ND,NE,NH,NJ,NM,NV,NY,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VA,VT,WA,WI,WV,WY,DC
       # Path to write kml files
       - OUTPUT_PATH=/Output
+      # Schedule crontime (https://crontab.guru/ is a helpful reference)
+      # You shold NOT use any interval faster than hourly, recommended is daily or slower
+      # If variable is not set it will run once & exit
+      - SCHEDULE_CRONTIME='0 3 * * *'
     volumes:
       - ./Output:/Output
       - /etc/localtime:/etc/localtime

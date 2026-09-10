@@ -9,7 +9,7 @@ import json
 import glob
 import os
 import math
-import schedule
+import pycron
 import sys
 import time
 import urllib.error
@@ -22,15 +22,17 @@ from xml.sax.saxutils import escape as xml_escape
 REQUEST_HEADERS = {
     "User-Agent": "deflock-kml-export/2.0 (contact: run by end user; ALPR-mapping tool using the OpenStreetMap Overpass API)",
 }
+STATES = 'AK,AL,AR,AZ,CA,CO,CT,DE,FL,GA,HI,IA,ID,IL,IN,KS,KY,LA,MA,MD,ME,MI,MN,MO,MS,MT,NC,ND,NE,NH,NJ,NM,NV,NY,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VA,VT,WA,WI,WV,WY,DC'
 
-OVERPASS_MIRRORS = os.getenv('OVERPASS_MIRRORS').split(',')
-REQUEST_TIMEOUT_SECONDS = int(os.getenv('REQUEST_TIMEOUT_SECONDS'))
-RETRIES_PER_MIRROR = int(os.getenv('RETRIES_PER_MIRROR'))
-RETRY_BACKOFF_SECONDS = int(os.getenv('RETRY_BACKOFF_SECONDS'))
-CAMERA_VISION_RANGE = int(os.getenv('CAMERA_VISION_RANGE'))
-CAMERA_VISION_FOV = int(os.getenv('CAMERA_VISION_FOV'))
-INCLUDED_STATES = os.getenv('INCLUDED_STATES').split(',')
-OUTPUT_PATH = os.getenv('OUTPUT_PATH')
+OVERPASS_MIRRORS = os.getenv('OVERPASS_MIRRORS', 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',')
+REQUEST_TIMEOUT_SECONDS = int(os.getenv('REQUEST_TIMEOUT_SECONDS',180))
+RETRIES_PER_MIRROR = int(os.getenv('RETRIES_PER_MIRROR',5))
+RETRY_BACKOFF_SECONDS = int(os.getenv('RETRY_BACKOFF_SECONDS',30))
+CAMERA_VISION_RANGE = int(os.getenv('CAMERA_VISION_RANGE',100))
+CAMERA_VISION_FOV = int(os.getenv('CAMERA_VISION_FOV',40))
+INCLUDED_STATES = os.getenv('INCLUDED_STATES',STATES).split(',')
+OUTPUT_PATH = os.getenv('OUTPUT_PATH','.')
+SCHEDULE_CRONTIME = os.getenv('SCHEDULE_CRONTIME','')
 
 
 def run_overpass_query(query: str, label: str) -> dict:
@@ -54,7 +56,7 @@ def run_overpass_query(query: str, label: str) -> dict:
                 last_error = str(e)
             print(f"  [{label}] attempt {attempt} via {mirror} failed: {last_error}", file=sys.stderr)
             time.sleep(RETRY_BACKOFF_SECONDS)
-    raise RuntimeError(f"[{label}] all Overpass mirrors failed. Last error: {last_error}")
+    raise RuntimeError(f"[{label}] all Overpass mirrors failed. Last error: {last_error}", file=sys.stderr)
 
 
 # ============================================================================
@@ -63,14 +65,17 @@ def run_overpass_query(query: str, label: str) -> dict:
 
 def fetch_state_nodes(state_code: str) -> list:
     """Fetch every surveillance:type=ALPR node inside one US state's boundary."""
-    query = (
-        "[out:json][timeout:150][maxsize:1073741824];"
-        f'area["ISO3166-2"="US-{state_code}"]["admin_level"="4"]->.searchArea;'
-        'node["surveillance:type"="ALPR"](area.searchArea);'
-        "out body;"
-    )
-    result = run_overpass_query(query, state_code)
-    return result.get("elements", [])
+    if state_code in STATES.split(','):
+        query = (
+            "[out:json][timeout:150][maxsize:1073741824];"
+            f'area["ISO3166-2"="US-{state_code}"]["admin_level"="4"]->.searchArea;'
+            'node["surveillance:type"="ALPR"](area.searchArea);'
+            "out body;"
+        )
+        result = run_overpass_query(query, state_code)
+        return result.get("elements", [])
+    else:
+        return
 
 
 # ============================================================================
@@ -197,6 +202,7 @@ def write_kml_files(nodes: list, state: str):
 
     # Delete older files for state
     for f in glob.glob(os.path.join(OUTPUT_PATH,f"deflock_{state}_*.kml")):
+        print(f"[{state}] deleting old file: {f}", file=sys.stdout)
         os.remove(f)
 
     filename = f"deflock_{state}_{today}.kml"
@@ -232,17 +238,28 @@ def write_kml_files(nodes: list, state: str):
     )
     with open(path, "w", encoding="utf-8") as f:
         f.write(kml)
+    print(f"[{state}] wrote file: {path}", file=sys.stdout)
     return
 
-def main():
+if len(SCHEDULE_CRONTIME):
+    while True:
+        if pycron.is_now(SCHEDULE_CRONTIME):
+            for state in INCLUDED_STATES:
+                nodes = fetch_state_nodes(state)
+                if len(nodes) > 0:
+                    write_kml_files(nodes, state)
+                else:
+                    print(f"[{state}] returned no nodes, nothing to write", file=sys.stderr)
+            # Sleep to avoid being triggered multiple times in the same minute
+            # This shouldn't happen anyway as the process almost always takes >1 minute
+            time.sleep(60)
+        else:
+            time.sleep(60)  
+else:
     for state in INCLUDED_STATES:
         nodes = fetch_state_nodes(state)
         if len(nodes) > 0:
             write_kml_files(nodes, state)
-
-schedule.every().day.at("03:00").do(main)
-
-while True:
-    schedule.run_pending()
-    time.sleep(60)
-
+        else:
+            print(f"[{state}] returned no nodes, nothing to write", file=sys.stderr)
+    exit(0)
