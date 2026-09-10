@@ -240,7 +240,7 @@ def main():
 
         print(f"\nWrote file: {path}")
 
-schedule.every().day.at("20:57").do(main)
+schedule.every().day.at("21:01").do(main)
 
 while True:
     schedule.run_pending()
