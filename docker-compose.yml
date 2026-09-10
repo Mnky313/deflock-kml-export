@@ -1,0 +1,31 @@
+services:
+  deflock:
+    container_name: Deflock_KML
+    build: https://github.com/Mnky313/deflock-kml-export.git
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 512M
+    environment:
+      # URLs called for overpass queries
+      - OVERPASS_MIRRORS=https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter
+      # Timeout duration for overpass queries
+      - REQUEST_TIMEOUT_SECONDS=180
+      # Amount of times to retry failed overpass queries
+      - RETRIES_PER_MIRROR=65535
+      # Time to wait between failed overpass queries
+      - RETRY_BACKOFF_SECONDS=30
+      # Length of vision cone/circle to draw from camera location (meters)
+      - CAMERA_VISION_RANGE=100
+      # Camera field of view when drawing vision cones
+      - CAMERA_VISION_FOV=40
+      # States to include in export
+      - INCLUDED_STATES=AK,AL,AR,AZ,CA,CO,CT,DE,FL,GA,HI,IA,ID,IL,IN,KS,KY,LA,MA,MD,ME,MI,MN,MO,MS,MT,NC,ND,NE,NH,NJ,NM,NV,NY,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VA,VT,WA,WI,WV,WY,DC
+      # Path to write kml files
+      - OUTPUT_PATH=/Output
+    volumes:
+      - ./Output:/Output
+      - /etc/localtime:/etc/localtime
+    restart: unless-stopped
+    network_mode: bridge
