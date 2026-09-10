@@ -243,6 +243,7 @@ def write_kml_files(nodes: list, state: str):
 
 if len(SCHEDULE_CRONTIME):
     while True:
+        print(pycron.is_now(SCHEDULE_CRONTIME), file=sys.stder)
         if pycron.is_now(SCHEDULE_CRONTIME):
             for state in INCLUDED_STATES:
                 nodes = fetch_state_nodes(state)
