@@ -226,6 +226,7 @@ def write_kml_files(nodes: list, state: str, output_dir: str):
 
 def main():
     for state in INCLUDED_STATES:
+        fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         print(f"Fetching {state} from OpenStreetMap (as of {fetched_at})...")
         nodes = fetch_state_nodes(state)
 
