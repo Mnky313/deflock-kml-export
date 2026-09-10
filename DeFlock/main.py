@@ -6,6 +6,7 @@ Also modified to draw vision cones/circles around cameras for use with ALPRwatch
 
 import http.client
 import json
+import glob
 import os
 import math
 import schedule
@@ -193,6 +194,10 @@ def write_kml_files(nodes: list, state: str):
     """
     os.makedirs(OUTPUT_PATH, exist_ok=True)
     today = date.today().isoformat()
+
+    # Delete older files for state
+    for f in glob.glob(os.path.join(OUTPUT_PATH,f"deflock_{state}_*.kml")):
+        os.remove(f)
 
     filename = f"deflock_{state}_{today}.kml"
     path = os.path.join(OUTPUT_PATH, filename)
