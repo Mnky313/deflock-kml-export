@@ -240,7 +240,7 @@ def main():
         if len(nodes) > 0:
             write_kml_files(nodes, state)
 
-schedule.every().day.at("3:00").do(main)
+schedule.every().day.at("03:00").do(main)
 
 while True:
     schedule.run_pending()
