@@ -27,7 +27,7 @@ services:
       # Schedule crontime (https://crontab.guru/ is a helpful reference)
       # You shold NOT use any interval faster than hourly, recommended is daily or slower
       # If variable is not set it will run once & exit
-      - SCHEDULE_CRONTIME='0 3 * * *'
+      - SCHEDULE_CRONTIME=0 3 * * *
     volumes:
       - ./Output:/Output
       - /etc/localtime:/etc/localtime
