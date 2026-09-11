@@ -56,7 +56,8 @@ def run_overpass_query(query: str, label: str) -> dict:
                 last_error = str(e)
             print(f"  [{label}] attempt {attempt} via {mirror} failed: {last_error}", file=sys.stderr)
             time.sleep(RETRY_BACKOFF_SECONDS)
-    raise RuntimeError(f"[{label}] all Overpass mirrors failed. Last error: {last_error}", file=sys.stderr)
+    print(f"[{label}] all Overpass mirrors failed. Last error: {last_error}", file=sys.stderr)
+    raise RuntimeError()
 
 
 # ============================================================================
