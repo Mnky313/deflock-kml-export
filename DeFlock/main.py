@@ -34,30 +34,27 @@ INCLUDED_STATES = os.getenv('INCLUDED_STATES',STATES).split(',')
 OUTPUT_PATH = os.getenv('OUTPUT_PATH','.')
 SCHEDULE_CRONTIME = os.getenv('SCHEDULE_CRONTIME','')
 
-
 def run_overpass_query(query: str, label: str) -> dict:
-    """POST a query to Overpass, retrying across mirrors. Returns parsed JSON."""
-    data = urllib.parse.urlencode({"data": query}).encode("utf-8")
-    last_error = ""
+    """
+    POST a query to Overpass, retrying across mirrors. Returns parsed JSON.
+    """
     for mirror in OVERPASS_MIRRORS:
-        for attempt in range(1, RETRIES_PER_MIRROR + 1):
+        for attempt in range(0, RETRIES_PER_MIRROR):
             try:
-                req = urllib.request.Request(mirror, data=data, method="POST", headers=REQUEST_HEADERS)
-                with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
-                    body = resp.read()
-                    parsed = json.loads(body)
-                    if "elements" in parsed:
-                        return parsed
-                    last_error = "response had no 'elements' field"
+                with urllib.request.urlopen(urllib.request.Request(mirror, data=urllib.parse.urlencode({"data": query}).encode("utf-8"), method="POST", headers=REQUEST_HEADERS), timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+                    response_json = json.loads(resp.read())
+                    if "elements" not in response_json:
+                        print(f"[{label}] Unexpected response from mirror {mirror}", file=sys.stderr)
+                    else:
+                        return response_json
             except urllib.error.HTTPError as e:
-                last_error = f"HTTP {e.code}"
+                print(f"[{label}] HTTP {e.code} Error from mirror {mirror}", file=sys.stderr)
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError,
                     http.client.HTTPException, ConnectionError, OSError) as e:
-                last_error = str(e)
-            print(f"  [{label}] attempt {attempt} via {mirror} failed: {last_error}", file=sys.stderr)
+                print(f"[{label}] {str(e)} Error from mirror {mirror}", file=sys.stderr)
             time.sleep(RETRY_BACKOFF_SECONDS)
-    print(f"[{label}] all Overpass mirrors failed. Last error: {last_error}", file=sys.stderr)
-    raise RuntimeError()
+    print(f"[{label}] all Overpass mirrors failed.", file=sys.stderr)
+    return False
 
 
 # ============================================================================
@@ -65,7 +62,9 @@ def run_overpass_query(query: str, label: str) -> dict:
 # ============================================================================
 
 def fetch_state_nodes(state_code: str) -> list:
-    """Fetch every surveillance:type=ALPR node inside one US state's boundary."""
+    """
+    Fetch every surveillance:type=ALPR node inside one US state's boundary.
+    """
     if state_code in STATES.split(','):
         query = (
             "[out:json][timeout:150][maxsize:1073741824];"
@@ -74,80 +73,85 @@ def fetch_state_nodes(state_code: str) -> list:
             "out body;"
         )
         result = run_overpass_query(query, state_code)
-        return result.get("elements", [])
+        if result:
+            return result.get("elements", [])
+        else:
+            return False
     else:
-        return
+        return False
 
 
 # ============================================================================
 # KML generation
 # ============================================================================
 
-def move_point(lat: float, lng: float, distance: int, bearing: int):
+def move_point(lat: float, lon: float, distance: int, bearing: int):
     """
-    Returns (lat, lng) a `distance` meters away at `bearing` degrees.
+    Returns (lat, lon) a `distance` meters away at `bearing` degrees.
     0 = north, 90 = east, 270 = west.
     """
-    R = 6378137  # WGS84 mean radius in meters
+
+    # Convert distance meters to angular distance using Earth's equatorial radius
+    distance_ang = 6378137 / distance
     
     # Convert inputs to radians
-    lat_rad = math.radians(lat)
-    lng_rad = math.radians(lng)
-    bearing_rad = math.radians(bearing)
-    
-    # Angular distance in radians
-    d = distance / R
+    lat_rad,lon_rad,bearing_rad = math.radians(lat),math.radians(lon),math.radians(bearing)
     
     # Calculate new latitude
     new_lat_rad = math.asin(
-        math.sin(lat_rad) * math.cos(d) +
-        math.cos(lat_rad) * math.sin(d) * math.cos(bearing_rad)
+        math.sin(lat_rad) * math.cos(distance_ang) +
+        math.cos(lat_rad) * math.sin(distance_ang) * math.cos(bearing_rad)
     )
     
     # Calculate new longitude
-    new_lng_rad = lng_rad + math.atan2(
-        math.sin(bearing_rad) * math.sin(d) * math.cos(lat_rad),
-        math.cos(d) - math.sin(lat_rad) * math.sin(new_lat_rad)
+    new_lon_rad = lon_rad + math.atan2(
+        math.sin(bearing_rad) * math.sin(distance_ang) * math.cos(lat_rad),
+        math.cos(distance_ang) - math.sin(lat_rad) * math.sin(new_lat_rad)
     )
     
-    # Convert back to degrees
-    new_lat = math.degrees(new_lat_rad)
-    new_lng = math.degrees(new_lng_rad)
-    
-    return new_lat, new_lng
+    # Return values back as degrees 
+    return math.degrees(new_lat_rad), math.degrees(new_lon_rad)
 
-def circle_points(center_lat: float, center_lng: float, radius: int, num_points: int):
+def draw_non_directional_vision(center_lat: float, center_lon: float, radius: int, num_points: int):
     """
-    Returns a list of (lat, lng) points forming a circle around the center.
+    Draws a circle around node location (360 degree camera)
     """
     points = []
     for i in range(num_points):
-        angle = (360 / num_points) * i  # degrees for each point
-        # Convert angle to bearing (0 = north, clockwise)
-        bearing = angle
-        # Move `radius` meters at this bearing
-        lat, lng = move_point(center_lat, center_lng, radius, bearing)
-        points.append(f"{lng},{lat}")
-    # Close circle
+        lat, lon = move_point(center_lat, center_lon, radius, (360/num_points)*i)
+        points.append(f"{lon},{lat}")
+    # Close circle by appending first position to end
     points.append(points[0])
     return points
 
+def draw_directional_vision(lat: float, lon: float, direction: int):
+    """
+    Draws a vision cone out from node location (directional camera)
+    """
+    left_lat, left_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction-(CAMERA_VISION_FOV/2))
+    right_lat, right_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction+(CAMERA_VISION_FOV/2))
+    # Return triangle of vision cone (including origin point twice to close triangle)
+    return [f"{lon},{lat}",f"{left_lon},{left_lat}",f"{right_lon},{right_lat}",f"{lon},{lat}"]
+
 def node_to_placemark(node: dict) -> str:
+    """
+    Converts OSM node to XML placemark for KML
+    """
+
     tags = node.get("tags", {})
-    lat = node.get("lat")
-    lon = node.get("lon")
+    lat,lon = node.get("lat"),node.get("lon")
+
+    # Return nothing if node does not have a valid location
     if lat is None or lon is None:
         return ""
 
-    operator = tags.get("operator", "")
-    manufacturer = tags.get("manufacturer", "")
-    direction = tags.get("direction", "")
-    zone = tags.get("surveillance:zone", "")
-    camera_type = tags.get("camera:type", "")
+    operator,manufacturer,direction,zone,camera_type = tags.get("operator", ""),tags.get("manufacturer", ""),tags.get("direction", ""),tags.get("surveillance:zone", ""),tags.get("camera:type", "")
 
+    # Set name for placemark, fallback to ALPR Camera
     name_parts = [p for p in [operator, "ALPR"] if p]
     name = xml_escape(" ".join(name_parts)) if name_parts else "ALPR Camera"
 
+    # Build description from tags
     desc_lines = [f"OSM node: https://www.openstreetmap.org/node/{node.get('id')}"]
     for label, value in [
         ("Operator", operator),
@@ -160,23 +164,13 @@ def node_to_placemark(node: dict) -> str:
             desc_lines.append(f"{label}: {value}")
     description = xml_escape("\n".join(desc_lines))
 
-    try:
-        # Convert direction to int
-        direction_int = int(direction)
-        # Get leftmost (reletive) point of vision cone
-        left_lat, left_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction_int-(CAMERA_VISION_FOV/2))
-        # Get rightmost (relative) point of vision cone
-        right_lat, right_lon = move_point(lat,lon,CAMERA_VISION_RANGE,direction_int+(CAMERA_VISION_FOV/2))
-        # Create triangle of vision cone
-        coordsArray = [f"{lon},{lat}",f"{left_lon},{left_lat}",f"{right_lon},{right_lat}",f"{lon},{lat}"]
-    except:
-        # if something fails default to circle (usually because direction is not a number)
-        coordsArray = circle_points(lat,lon,CAMERA_VISION_RANGE,32)
+    if isinstance(direction,int):
+        points = draw_directional_vision(lat,lon,int(direction)) 
+    else:
+        points = draw_non_directional_vision(lat,lon,CAMERA_VISION_RANGE,32)
 
-    # Convert coordsArray to plain string for inputting in XML
-    outputCoords=""
-    for p in coordsArray:
-        outputCoords=f"{outputCoords}{p}\n"
+    # Convert points array to plain string for inputting in XML
+    coordinates = "".join(f"{p}\n" for p in points)
     return (
         "    <Placemark>\n"
         f"      <name>{name}</name>\n"
@@ -186,7 +180,7 @@ def node_to_placemark(node: dict) -> str:
         "           <tessellate>1</tessellate>\n"
         "           <altitudeMode>clampToGround</altitudeMode>\n"
         "           <coordinates>\n"
-        f"              {outputCoords}"
+        f"              {coordinates}"
         "           </coordinates>\n"
         "      </LineString>\n"
         "      <styleUrl>#alprStyle</styleUrl>\n"
@@ -194,7 +188,7 @@ def node_to_placemark(node: dict) -> str:
     )
 
 
-def write_kml_files(nodes: list, state: str):
+def write_kml_file(nodes: list, state: str):
     """
     Writes nodes to file with todays date/state
     """
@@ -206,8 +200,7 @@ def write_kml_files(nodes: list, state: str):
         print(f"[{state}] deleting old file: {f}", file=sys.stdout)
         os.remove(f)
 
-    filename = f"deflock_{state}_{today}.kml"
-    path = os.path.join(OUTPUT_PATH, filename)
+    path = os.path.join(OUTPUT_PATH, f"deflock_{state}_{today}.kml")
 
     placemarks = "".join(node_to_placemark(n) for n in nodes)
     doc_name = f"DeFlock ALPR Cameras -- {state} ({today})"
@@ -248,7 +241,7 @@ if len(SCHEDULE_CRONTIME):
             for state in INCLUDED_STATES:
                 nodes = fetch_state_nodes(state)
                 if len(nodes) > 0:
-                    write_kml_files(nodes, state)
+                    write_kml_file(nodes, state)
                 else:
                     print(f"[{state}] returned no nodes, nothing to write", file=sys.stderr)
             # Sleep to avoid being triggered multiple times in the same minute
@@ -260,7 +253,7 @@ else:
     for state in INCLUDED_STATES:
         nodes = fetch_state_nodes(state)
         if len(nodes) > 0:
-            write_kml_files(nodes, state)
+            write_kml_file(nodes, state)
         else:
             print(f"[{state}] returned no nodes, nothing to write", file=sys.stderr)
     exit(0)
