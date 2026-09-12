@@ -13,7 +13,7 @@ services:
       # Timeout duration for overpass queries
       - REQUEST_TIMEOUT_SECONDS=180
       # Amount of times to retry failed overpass queries
-      - RETRIES_PER_MIRROR=65535
+      - RETRIES_PER_MIRROR=5
       # Time to wait between failed overpass queries
       - RETRY_BACKOFF_SECONDS=30
       # Length of vision cone/circle to draw from camera location (meters)
@@ -22,7 +22,7 @@ services:
       - CAMERA_VISION_FOV=40
       # States to include in export
       - INCLUDED_STATES=AK,AL,AR,AZ,CA,CO,CT,DE,FL,GA,HI,IA,ID,IL,IN,KS,KY,LA,MA,MD,ME,MI,MN,MO,MS,MT,NC,ND,NE,NH,NJ,NM,NV,NY,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VA,VT,WA,WI,WV,WY,DC
-      # Path to write kml files
+      # Path to write kml file(s)
       - OUTPUT_PATH=/Output
       # Schedule crontime (https://crontab.guru/ is a helpful reference)
       # You shold NOT use any interval faster than hourly, recommended is daily or slower
