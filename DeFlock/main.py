@@ -92,7 +92,7 @@ def move_point(lat: float, lon: float, distance: int, bearing: int):
     """
 
     # Convert distance meters to angular distance using Earth's equatorial radius
-    distance_ang = 6378137 / distance
+    distance_ang =  distance / 6378137
     
     # Convert inputs to radians
     lat_rad,lon_rad,bearing_rad = math.radians(lat),math.radians(lon),math.radians(bearing)
