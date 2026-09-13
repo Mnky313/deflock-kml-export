@@ -164,9 +164,11 @@ def node_to_placemark(node: dict) -> str:
             desc_lines.append(f"{label}: {value}")
     description = xml_escape("\n".join(desc_lines))
 
-    if isinstance(direction,int):
-        points = draw_directional_vision(lat,lon,int(direction)) 
-    else:
+    try:
+        # Try converting direction to int
+        points = draw_directional_vision(lat,lon,int(direction))       
+    except ValueError:
+        # Fallback to circle if conversion fails
         points = draw_non_directional_vision(lat,lon,CAMERA_VISION_RANGE,32)
 
     # Convert points array to plain string for inputting in XML
