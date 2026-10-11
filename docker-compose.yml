@@ -9,7 +9,7 @@ services:
           memory: 512M
     environment:
       # URLs called for overpass queries
-      - OVERPASS_MIRRORS=https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter
+      - OVERPASS_MIRRORS=https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter
       # Timeout duration for overpass queries
       - REQUEST_TIMEOUT_SECONDS=180
       # Amount of times to retry failed overpass queries

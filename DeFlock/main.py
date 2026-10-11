@@ -24,7 +24,7 @@ REQUEST_HEADERS = {
 }
 STATES = 'AK,AL,AR,AZ,CA,CO,CT,DE,FL,GA,HI,IA,ID,IL,IN,KS,KY,LA,MA,MD,ME,MI,MN,MO,MS,MT,NC,ND,NE,NH,NJ,NM,NV,NY,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VA,VT,WA,WI,WV,WY,DC'
 
-OVERPASS_MIRRORS = os.getenv('OVERPASS_MIRRORS', 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',')
+OVERPASS_MIRRORS = os.getenv('OVERPASS_MIRRORS', 'https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter').split(',')
 REQUEST_TIMEOUT_SECONDS = int(os.getenv('REQUEST_TIMEOUT_SECONDS',180))
 RETRIES_PER_MIRROR = int(os.getenv('RETRIES_PER_MIRROR',5))
 RETRY_BACKOFF_SECONDS = int(os.getenv('RETRY_BACKOFF_SECONDS',30))
@@ -67,7 +67,7 @@ def fetch_state_nodes(state_code: str) -> list:
     """
     if state_code in STATES.split(','):
         query = (
-            "[out:json][timeout:150][maxsize:1073741824];"
+            "[out:json][timeout:150];"
             f'area["ISO3166-2"="US-{state_code}"]["admin_level"="4"]->.searchArea;'
             'node["surveillance:type"="ALPR"](area.searchArea);'
             "out body;"
