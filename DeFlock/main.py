@@ -32,7 +32,7 @@ CAMERA_VISION_RANGE = int(os.getenv('CAMERA_VISION_RANGE',100))
 CAMERA_VISION_FOV = int(os.getenv('CAMERA_VISION_FOV',40))
 INCLUDED_STATES = os.getenv('INCLUDED_STATES',STATES).split(',')
 OUTPUT_PATH = os.getenv('OUTPUT_PATH','.')
-INCLUDE_DATE_IN_FILENAME = os.getenv('OUTPUT_PATH',True)
+INCLUDE_DATE_IN_FILENAME = os.getenv('INCLUDE_DATE_IN_FILENAME',True)
 SCHEDULE_CRONTIME = os.getenv('SCHEDULE_CRONTIME','')
 
 def run_overpass_query(query: str, label: str) -> dict:
