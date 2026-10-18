@@ -32,6 +32,7 @@ CAMERA_VISION_RANGE = int(os.getenv('CAMERA_VISION_RANGE',100))
 CAMERA_VISION_FOV = int(os.getenv('CAMERA_VISION_FOV',40))
 INCLUDED_STATES = os.getenv('INCLUDED_STATES',STATES).split(',')
 OUTPUT_PATH = os.getenv('OUTPUT_PATH','.')
+INCLUDE_DATE_IN_FILENAME = os.getenv('OUTPUT_PATH',True)
 SCHEDULE_CRONTIME = os.getenv('SCHEDULE_CRONTIME','')
 
 def run_overpass_query(query: str, label: str) -> dict:
@@ -202,7 +203,10 @@ def write_kml_file(nodes: list, state: str):
         print(f"[{state}] deleting old file: {f}", file=sys.stdout)
         os.remove(f)
 
-    path = os.path.join(OUTPUT_PATH, f"deflock_{state}_{today}.kml")
+    if INCLUDE_DATE_IN_FILENAME:
+        path = os.path.join(OUTPUT_PATH, f"deflock_{state}_{today}.kml")
+    else:
+        path = os.path.join(OUTPUT_PATH, f"deflock_{state}_latest.kml")
 
     placemarks = "".join(node_to_placemark(n) for n in nodes)
     doc_name = f"DeFlock ALPR Cameras -- {state} ({today})"
